@@ -121,6 +121,7 @@ type Prop struct {
 	// is not nil, it is sent back to the caller of Set and the property is not
 	// changed.
 	Callback func(*Change) *dbus.Error
+	Getter func() interface{}
 }
 
 // Change represents a change of a property by a call to Set.
@@ -179,7 +180,11 @@ func (p *Properties) Get(iface, property string) (dbus.Variant, *dbus.Error) {
 	if !ok {
 		return dbus.Variant{}, ErrPropNotFound
 	}
-	return dbus.MakeVariant(prop.Value), nil
+	if prop.Getter == nil {
+		return dbus.MakeVariant(prop.Value), nil
+	} else {
+		return dbus.MakeVariant(prop.Getter()), nil
+	}
 }
 
 // GetAll implements org.freedesktop.DBus.Properties.GetAll.
@@ -192,7 +197,11 @@ func (p *Properties) GetAll(iface string) (map[string]dbus.Variant, *dbus.Error)
 	}
 	rm := make(map[string]dbus.Variant, len(m))
 	for k, v := range m {
-		rm[k] = dbus.MakeVariant(v.Value)
+		if v.Getter == nil {
+			rm[k] = dbus.MakeVariant(v.Value)
+		} else {
+			rm[k] = dbus.MakeVariant(v.Getter())
+		}
 	}
 	return rm, nil
 }
@@ -202,7 +211,11 @@ func (p *Properties) GetAll(iface string) (map[string]dbus.Variant, *dbus.Error)
 func (p *Properties) GetMust(iface, property string) interface{} {
 	p.mut.RLock()
 	defer p.mut.RUnlock()
-	return p.m[iface][property].Value
+	if p.m[iface][property].Getter == nil {
+		return p.m[iface][property].Value
+	} else {
+		return p.m[iface][property].Getter()
+	}
 }
 
 // Introspection returns the introspection data that represents the properties
